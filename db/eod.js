@@ -36,6 +36,9 @@ const eod = {
       FROM eod_logs
       WHERE date BETWEEN ? AND ?
     `).get(startDate, endDate),
+
+  getRange: (startDate, endDate) =>
+    db.prepare('SELECT * FROM eod_logs WHERE date BETWEEN ? AND ? ORDER BY date').all(startDate, endDate),
 };
 
 module.exports = eod;

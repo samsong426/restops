@@ -3,7 +3,10 @@ const router = express.Router();
 const db = require('../db/inventory');
 
 router.get('/items', (req, res) => res.json(db.getAllItems()));
-router.post('/items', (req, res) => res.json(db.addItem(req.body)));
+router.post('/items', (req, res) => {
+  try { res.json(db.addItem(req.body)); }
+  catch (e) { res.status(409).json({ error: e.message }); }
+});
 router.patch('/items/:id/par', (req, res) => res.json(db.updatePar(req.params.id, req.body.par_level)));
 router.delete('/items/:id', (req, res) => res.json(db.deactivateItem(req.params.id)));
 

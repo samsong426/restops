@@ -20,10 +20,14 @@ const api = async (method, url, body) => {
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (!res.ok) throw new Error(`${res.status}`);
+    if (!res.ok) {
+      let msg = `${res.status}`;
+      try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+      throw new Error(msg);
+    }
     return res.json();
   } catch (e) {
-    toast(`Request failed: ${e.message}`, 'error');
+    toast(e.message, 'error');
     throw e;
   }
 };
@@ -1059,8 +1063,12 @@ function renderInventoryDashboard(counts, orderList, batchesByItem = {}) {
               else if (diff <= 3)  cls = 'expires-soon';
               else if (diff <= 7)  cls = 'expires-week';
               const diffTxt = diff < 0 ? `expired ${Math.abs(diff)}d ago` : diff === 0 ? 'expires today' : `${diff}d left`;
+              const buyLabel = b.purchase_date
+                ? new Date(b.purchase_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : null;
               return `<div class="inv-batch-row ${i === 0 ? 'is-first' : ''}" id="batch-row-${b.id}">
                 <span class="batch-qty">${Number(b.qty).toFixed(1)} ${item.unit}</span>
+                ${buyLabel ? `<span class="exp-text" style="color:var(--text-3)">Bought ${buyLabel}</span>` : ''}
                 <span class="exp-text ${cls}">Exp ${expLabel} · ${diffTxt}</span>
                 <button class="btn btn-sm btn-ghost" style="padding:2px 8px;font-size:11px" onclick="toggleBatchEdit(${b.id})">Edit</button>
                 <button class="btn btn-icon btn-danger" onclick="deleteBatch(${b.id})" title="Remove batch">✕</button>
@@ -1086,10 +1094,17 @@ function renderInventoryDashboard(counts, orderList, batchesByItem = {}) {
                   <span class="inv-par-text ${state}">${statusText}</span>${usedLine}
                 </div>
                 <div class="inv-batches">${batchLines}</div>
-                <div class="inv-receive-form" id="receive-${item.id}" style="display:none">
+                <div class="inv-receive-form" id="receive-${item.id}" style="display:none;flex-wrap:wrap;gap:6px">
                   <input type="number" class="inv-receive-qty" placeholder="Qty (${item.unit})" step="0.5" min="0" id="rqty-${item.id}">
-                  <input type="date" class="inv-receive-date" id="rdate-${item.id}">
-                  <button class="btn btn-sm btn-accent" onclick="addBatch(${item.id})">Add</button>
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <span style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Expiry</span>
+                    <input type="date" class="inv-receive-date" id="rdate-${item.id}">
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <span style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Bought</span>
+                    <input type="date" class="inv-receive-date" id="rpurchase-${item.id}">
+                  </div>
+                  <button class="btn btn-sm btn-accent" style="align-self:flex-end" onclick="addBatch(${item.id})">Add</button>
                 </div>
                 <div class="inv-item-edit-form" id="item-edit-${item.id}" style="display:none">
                   <div class="row" style="gap:6px">
@@ -1145,11 +1160,16 @@ function toggleReceive(itemId) {
 }
 
 async function addBatch(itemId) {
-  const qty  = document.getElementById(`rqty-${itemId}`).value;
-  const date = document.getElementById(`rdate-${itemId}`).value;
+  const qty      = document.getElementById(`rqty-${itemId}`).value;
+  const expiry   = document.getElementById(`rdate-${itemId}`).value;
+  const purchase = document.getElementById(`rpurchase-${itemId}`).value;
   if (!qty || Number(qty) <= 0) { toast('Enter a quantity', 'error'); return; }
-  if (!date) { toast('Set an expiry date', 'error'); return; }
-  await api('POST', '/api/inventory/batches', { item_id: itemId, qty: Number(qty), expiry_date: date });
+  if (!expiry) { toast('Set an expiry date', 'error'); return; }
+  const today = new Date().toISOString().slice(0, 10);
+  await api('POST', '/api/inventory/batches', {
+    item_id: itemId, qty: Number(qty), expiry_date: expiry,
+    purchase_date: purchase || today,
+  });
   toast('Batch added', 'success');
   await loadInventory();
 }
@@ -1288,6 +1308,37 @@ const EOD_STEPS = [
     summary: () => `Cash $${Number(eodState.values['eod-cash']).toFixed(2)} · Card $${Number(eodState.values['eod-card']).toFixed(2)}`,
   },
   {
+    id: 'expenses', title: 'Daily expenses logged',
+    render: () => {
+      const cf = eodState.cashflow || {};
+      const laborTotal     = cf.labor_total     || 0;
+      const inventoryTotal = cf.inventory_total  || 0;
+      const otherTotal     = cf.other_total      || 0;
+      const otherCount     = (cf.other_expenses  || []).length;
+      const totalExp       = cf.total_expenses   || 0;
+      const rows = [
+        `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">
+           <span style="color:var(--text-3)">Labor</span><span>$${Number(laborTotal).toFixed(2)}</span></div>`,
+        `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">
+           <span style="color:var(--text-3)">Inventory purchased</span><span>$${Number(inventoryTotal).toFixed(2)}</span></div>`,
+        `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">
+           <span style="color:var(--text-3)">Other (${otherCount} item${otherCount !== 1 ? 's' : ''})</span><span>$${Number(otherTotal).toFixed(2)}</span></div>`,
+        `<div style="display:flex;justify-content:space-between;padding:6px 0 2px;font-size:13px;font-weight:700;border-top:1px solid var(--border);margin-top:4px">
+           <span>Total expenses</span><span>$${Number(totalExp).toFixed(2)}</span></div>`,
+      ].join('');
+      return `<div>${rows}<div style="margin-top:8px;font-size:12px;color:var(--text-3)">
+        <a href="#" onclick="switchTab('cashflow');return false;" style="color:var(--accent)">Edit in Cash Flow tab</a>
+      </div></div>`;
+    },
+    check() { return true; },
+    skip: 'No expenses today',
+    summary: () => {
+      const cf = eodState.cashflow || {};
+      const total = cf.total_expenses || 0;
+      return total > 0 ? `Total expenses $${Number(total).toFixed(2)}` : 'No expenses today';
+    },
+  },
+  {
     id: 'ranout', title: "86'd tonight", skip: "Nothing 86'd",
     render: () => `
       <input type="text" id="eod-ranout" placeholder="e.g. salmon, oat milk"
@@ -1383,10 +1434,12 @@ async function loadEod() {
 async function reloadEodForDate() {
   const date = document.getElementById('eod-date').value;
   if (!date) return;
-  const [log, dishSales] = await Promise.all([
+  const [log, dishSales, cashflow] = await Promise.all([
     api('GET', `/api/eod/log/${date}`),
     api('GET', `/api/menu/sales/${date}`),
+    api('GET', `/api/expenses/day/${date}`).catch(() => null),
   ]);
+  eodState.cashflow = cashflow || {};
   eodState.values = {};
   eodState.checked = new Set();
 
@@ -1456,11 +1509,140 @@ async function deleteEodLog(date) {
   await loadEodHistory();
 }
 
+// ── EOD Export ────────────────────────────────────────────────────────────────
+
+function setExportRange(preset) {
+  const now = new Date();
+  let start, end;
+  if (preset === 'week') {
+    const day = now.getDay(); // 0=Sun
+    const mon = new Date(now); mon.setDate(now.getDate() - ((day + 6) % 7));
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    start = mon.toISOString().slice(0, 10);
+    end   = sun.toISOString().slice(0, 10);
+  } else {
+    start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    end = last.toISOString().slice(0, 10);
+  }
+  document.getElementById('export-start').value = start;
+  document.getElementById('export-end').value   = end;
+}
+
+function downloadEodCsv() {
+  const start = document.getElementById('export-start').value;
+  const end   = document.getElementById('export-end').value;
+  if (!start || !end) { toast('Set a date range first', 'error'); return; }
+  window.location.href = `/api/eod/export?start=${start}&end=${end}`;
+}
+
+// ── Cash Flow ─────────────────────────────────────────────────────────────────
+
+async function loadCashFlow() {
+  const date = document.getElementById('cf-date').value;
+  if (!date) return;
+  const d = await api('GET', `/api/expenses/day/${date}`);
+
+  // Stats bar
+  const net = d.net;
+  const netColor = net >= 0 ? 'var(--success)' : 'var(--danger)';
+  document.getElementById('cf-stats').innerHTML = `
+    <div class="inv-stat-card">
+      <div class="inv-stat-val success">$${Number(d.revenue).toFixed(2)}</div>
+      <div class="inv-stat-label">Revenue</div>
+    </div>
+    <div class="inv-stat-card">
+      <div class="inv-stat-val danger">$${Number(d.total_expenses).toFixed(2)}</div>
+      <div class="inv-stat-label">Total expenses</div>
+    </div>
+    <div class="inv-stat-card">
+      <div class="inv-stat-val" style="color:${netColor}">$${Number(Math.abs(net)).toFixed(2)}</div>
+      <div class="inv-stat-label">${net >= 0 ? 'Net profit' : 'Net loss'}</div>
+    </div>`;
+
+  // Revenue
+  document.getElementById('cf-revenue-val').textContent = d.revenue ? `$${Number(d.revenue).toFixed(2)}` : '—';
+  document.getElementById('cf-revenue-note').innerHTML = d.revenue
+    ? `From dish sales logged for this date · <a href="#" onclick="switchTab('sales');return false;" style="color:var(--accent)">View in Sales</a>`
+    : `No dish sales logged for this date · <a href="#" onclick="switchTab('sales');return false;" style="color:var(--accent)">Log in Sales</a>`;
+
+  // Labor
+  document.getElementById('cf-labor-total').textContent = `$${Number(d.labor_total).toFixed(2)}`;
+  document.getElementById('cf-labor-list').innerHTML = d.labor.length
+    ? d.labor.map(r => `
+        <div style="display:flex;justify-content:space-between;padding:8px 16px;border-bottom:1px solid var(--border)">
+          <span>${r.name} <span style="color:var(--text-3);font-size:12px">${r.role} · ${r.hours}h × $${Number(r.hourly_rate).toFixed(2)}/hr</span></span>
+          <span style="font-weight:600">$${Number(r.cost).toFixed(2)}</span>
+        </div>`).join('')
+    : '<div style="padding:12px 16px;color:var(--text-3);font-size:13px">No shifts scheduled</div>';
+
+  // Inventory
+  document.getElementById('cf-inv-total').textContent = `$${Number(d.inventory_total).toFixed(2)}`;
+  document.getElementById('cf-inv-list').innerHTML = d.inventory.length
+    ? d.inventory.map(r => `
+        <div style="display:flex;justify-content:space-between;padding:8px 16px;border-bottom:1px solid var(--border)">
+          <span>${r.name} <span style="color:var(--text-3);font-size:12px">${Number(r.qty).toFixed(1)} ${r.unit} × $${Number(r.cost_per_unit).toFixed(2)}</span></span>
+          <span style="font-weight:600">$${Number(r.total_cost).toFixed(2)}</span>
+        </div>`).join('')
+    : '<div style="padding:12px 16px;color:var(--text-3);font-size:13px">No inventory purchases logged</div>';
+
+  // Other expenses
+  document.getElementById('cf-other-total').textContent = `$${Number(d.other_total).toFixed(2)}`;
+  document.getElementById('cf-other-list').innerHTML = d.other_expenses.length
+    ? d.other_expenses.map(r => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+          <span>${r.description}</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:600">$${Number(r.amount).toFixed(2)}</span>
+            <button class="btn btn-icon btn-danger" onclick="deleteExpense(${r.id})" title="Remove">✕</button>
+          </span>
+        </div>`).join('')
+    : '';
+}
+
+async function addExpense() {
+  const desc   = document.getElementById('cf-exp-desc').value.trim();
+  const amount = document.getElementById('cf-exp-amount').value;
+  const date   = document.getElementById('cf-date').value;
+  if (!desc)   { toast('Enter a description', 'error'); return; }
+  if (!amount || Number(amount) <= 0) { toast('Enter an amount', 'error'); return; }
+  await api('POST', '/api/expenses', { date, description: desc, amount: Number(amount) });
+  document.getElementById('cf-exp-desc').value   = '';
+  document.getElementById('cf-exp-amount').value = '';
+  toast('Expense added', 'success');
+  await loadCashFlow();
+}
+
+async function deleteExpense(id) {
+  await api('DELETE', `/api/expenses/${id}`);
+  toast('Expense removed');
+  await loadCashFlow();
+}
+
+function initCashFlow() {
+  document.getElementById('cf-date').value = today();
+  loadCashFlow();
+}
+
+function switchTab(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  const sec = document.getElementById(`tab-${tabName}`);
+  if (btn) btn.classList.add('active');
+  if (sec) sec.classList.add('active');
+  if (tabName === 'cashflow') initCashFlow();
+  if (tabName === 'recipes')  loadRecipesTab();
+  if (tabName === 'sales')    loadSalesTab();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  if (btn.dataset.tab === 'recipes') btn.addEventListener('click', loadRecipesTab);
-  if (btn.dataset.tab === 'sales')   btn.addEventListener('click', loadSalesTab);
+  if (btn.dataset.tab === 'recipes')  btn.addEventListener('click', loadRecipesTab);
+  if (btn.dataset.tab === 'sales')    btn.addEventListener('click', loadSalesTab);
+  if (btn.dataset.tab === 'cashflow') btn.addEventListener('click', initCashFlow);
+  if (btn.dataset.tab === 'eod')      btn.addEventListener('click', loadEod);
 });
 
 (async () => {

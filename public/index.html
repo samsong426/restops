@@ -20,6 +20,7 @@
   <button class="tab-btn" data-tab="inventory">Inventory</button>
   <button class="tab-btn" data-tab="recipes">Recipes</button>
   <button class="tab-btn" data-tab="sales">Sales</button>
+  <button class="tab-btn" data-tab="cashflow">Cash Flow</button>
   <button class="tab-btn" data-tab="eod">EOD</button>
 </nav>
 
@@ -418,6 +419,90 @@
     </div>
     <div class="card-body" style="gap:0">
       <div class="eod-history" id="eod-history"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Export EOD data</span>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="field"><label>From</label><input type="date" id="export-start"></div>
+        <div class="field"><label>To</label><input type="date" id="export-end"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-ghost" onclick="setExportRange('week')">This week</button>
+        <button class="btn btn-sm btn-ghost" onclick="setExportRange('month')">This month</button>
+      </div>
+      <button class="btn btn-accent btn-full" onclick="downloadEodCsv()">Download CSV</button>
+    </div>
+  </div>
+
+</section>
+
+<!-- ── CASH FLOW ───────────────────────────────────────────────────────────────── -->
+<section id="tab-cashflow" class="tab">
+
+  <div class="card">
+    <div class="card-body" style="gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:15px;font-weight:700;color:var(--text)">Daily cash flow</span>
+        <input type="date" id="cf-date" style="width:auto;font-size:12px;padding:5px 8px" onchange="loadCashFlow()">
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="inv-stats-row" id="cf-stats"></div>
+
+  <!-- Revenue -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Revenue</span>
+      <span style="font-size:13px;color:var(--text-3)" id="cf-revenue-val"></span>
+    </div>
+    <div class="card-body" style="padding:8px 16px">
+      <div style="font-size:13px;color:var(--text-3)" id="cf-revenue-note">From EOD close for this date</div>
+    </div>
+  </div>
+
+  <!-- Labor -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Labor</span>
+      <span style="font-size:13px;font-weight:600;color:var(--danger)" id="cf-labor-total"></span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div id="cf-labor-list"></div>
+    </div>
+  </div>
+
+  <!-- Inventory purchased -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Inventory purchased</span>
+      <span style="font-size:13px;font-weight:600;color:var(--danger)" id="cf-inv-total"></span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div id="cf-inv-list"></div>
+    </div>
+  </div>
+
+  <!-- Other expenses -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Other expenses</span>
+      <span style="font-size:13px;font-weight:600;color:var(--danger)" id="cf-other-total"></span>
+    </div>
+    <div class="card-body">
+      <div id="cf-other-list"></div>
+      <div class="divider"></div>
+      <div class="row" style="margin-top:4px">
+        <div class="field"><label>Description</label><input type="text" id="cf-exp-desc" placeholder="e.g. Cleaning supplies"></div>
+        <div class="field"><label>Amount $</label><input type="number" id="cf-exp-amount" placeholder="0.00" step="0.01" min="0"></div>
+      </div>
+      <button class="btn btn-ghost" onclick="addExpense()">Add expense</button>
     </div>
   </div>
 

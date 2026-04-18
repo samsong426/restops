@@ -4,12 +4,15 @@ const inventory = {
   getAllItems: () =>
     db.prepare('SELECT * FROM inventory_items WHERE active = 1 ORDER BY category, name').all(),
 
-  addItem: ({ name, unit, par_level, category, cost_per_unit, expiry_date }) =>
-    db.prepare(`
+  addItem: ({ name, unit, par_level, category, cost_per_unit, expiry_date }) => {
+    const existing = db.prepare('SELECT name FROM inventory_items WHERE lower(name) = lower(?) AND active = 1').get(name);
+    if (existing) throw Object.assign(new Error(`"${existing.name}" already exists — use + Receive to add stock`), { code: 'DUPLICATE' });
+    return db.prepare(`
       INSERT INTO inventory_items (name, unit, par_level, category, cost_per_unit, expiry_date)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(name, unit || 'unit', par_level || 0, category || 'general',
-           cost_per_unit || 0, expiry_date || null),
+           cost_per_unit || 0, expiry_date || null);
+  },
 
   updateItem: (id, { name, unit, par_level, category, cost_per_unit, expiry_date }) =>
     db.prepare(`
@@ -29,8 +32,12 @@ const inventory = {
   getBatchesForItem: (item_id) =>
     db.prepare('SELECT * FROM inventory_batches WHERE item_id = ? ORDER BY expiry_date ASC').all(item_id),
 
-  addBatch: ({ item_id, qty, expiry_date }) =>
-    db.prepare('INSERT INTO inventory_batches (item_id, qty, expiry_date) VALUES (?, ?, ?)').run(item_id, qty, expiry_date),
+  addBatch: ({ item_id, qty, expiry_date, purchase_date }) => {
+    const now = new Date();
+    const localDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const pd = purchase_date || localDate;
+    return db.prepare('INSERT INTO inventory_batches (item_id, qty, expiry_date, purchase_date) VALUES (?, ?, ?, ?)').run(item_id, qty, expiry_date, pd);
+  },
 
   deleteBatch: (id) =>
     db.prepare('DELETE FROM inventory_batches WHERE id = ?').run(id),

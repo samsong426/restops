@@ -126,10 +126,22 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS daily_expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    description TEXT NOT NULL,
+    amount REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 // Migrations
 ['cost_per_unit REAL DEFAULT 0', 'expiry_date TEXT'].forEach(col => {
   try { db.exec(`ALTER TABLE inventory_items ADD COLUMN ${col}`); } catch {}
 });
 try { db.exec(`ALTER TABLE staff ADD COLUMN hourly_rate REAL DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE inventory_batches ADD COLUMN purchase_date TEXT`); } catch {}
+db.exec(`UPDATE inventory_batches SET purchase_date = date(received_at, 'localtime') WHERE purchase_date IS NULL`);
 
 module.exports = db;

@@ -9,6 +9,7 @@ app.use('/api/scheduling', require('./routes/scheduling'));
 app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/eod', require('./routes/eod'));
 app.use('/api/menu', require('./routes/menu'));
+app.use('/api/expenses', require('./routes/expenses'));
 
 app.get('/{*path}', (req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'index.html')));
