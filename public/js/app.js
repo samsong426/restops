@@ -947,8 +947,12 @@ async function loadInventory() {
 
 function renderInventoryDashboard(counts, orderList, batchesByItem = {}) {
   const total = counts.length;
-  const belowPar = orderList.length;
-  const noCounts = counts.filter(i => i.count == null).length;
+  const noCounts = counts.filter(i => i.count == null && i.total_batch_qty === 0).length;
+  const belowPar = counts.filter(i => {
+    const batchTotal = i.total_batch_qty > 0 ? Math.max(0, i.total_batch_qty - (i.consumed || 0)) : null;
+    const dq = batchTotal != null ? batchTotal : (i.estimated_remaining != null ? i.estimated_remaining : i.count);
+    return dq != null && dq < i.par_level;
+  }).length;
   const ok = total - belowPar - noCounts;
 
   // Stat cards
@@ -1006,7 +1010,11 @@ function renderInventoryDashboard(counts, orderList, batchesByItem = {}) {
   if (!counts.length) { catEl.innerHTML = '<div class="empty" style="padding:24px 0">No items yet — add one below</div>'; return; }
 
   catEl.innerHTML = Object.entries(byCategory).map(([cat, items]) => {
-    const catLow = items.filter(i => i.count != null && i.count < i.par_level).length;
+    const catLow = items.filter(i => {
+      const batchTotal = i.total_batch_qty > 0 ? Math.max(0, i.total_batch_qty - (i.consumed || 0)) : null;
+      const dq = batchTotal != null ? batchTotal : (i.estimated_remaining != null ? i.estimated_remaining : i.count);
+      return dq != null && dq < i.par_level;
+    }).length;
     return `
       <div class="inv-category-group">
         <div class="inv-category-header">
@@ -1033,19 +1041,15 @@ function renderInventoryDashboard(counts, orderList, batchesByItem = {}) {
               ? `${Number(displayQty).toFixed(1)} / ${par} ${item.unit}`
               : `${Number(displayQty).toFixed(1)} / ${par} ${item.unit} — need ${Number(par - displayQty).toFixed(1)} more`;
           const usedLine = item.consumed > 0
-            ? ` · <span class="inv-par-text no-count">${Number(item.consumed).toFixed(1)} used → est. ${Number(estRem).toFixed(1)} left</span>`
+            ? ` · <span class="inv-par-text no-count">${Number(item.consumed).toFixed(1)} used → est. ${Number(displayQty).toFixed(1)} left</span>`
             : '';
 
-          // Batch expiry lines — FIFO depletion: consume from oldest batch first
+          // Batch expiry lines — show received qty as-is; bar handles consumed separately
           const itemBatches = batchesByItem[item.id] || [];
           const batchLines = (() => {
             if (!itemBatches.length) return `<div class="inv-expiry-line"><span class="exp-text" style="color:var(--text-3)">No batches — receive stock to track expiry</span></div>`;
             const todayMs = new Date().setHours(0,0,0,0);
-            let unconsumed = item.consumed || 0;
             return itemBatches.map((b, i) => {
-              const depleted = Math.min(b.qty, unconsumed);
-              unconsumed -= depleted;
-              const batchRemaining = Math.max(0, b.qty - depleted);
               const expMs = new Date(b.expiry_date + 'T00:00:00').setHours(0,0,0,0);
               const diff = Math.round((expMs - todayMs) / 86400000);
               const expLabel = new Date(b.expiry_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -1056,7 +1060,7 @@ function renderInventoryDashboard(counts, orderList, batchesByItem = {}) {
               else if (diff <= 7)  cls = 'expires-week';
               const diffTxt = diff < 0 ? `expired ${Math.abs(diff)}d ago` : diff === 0 ? 'expires today' : `${diff}d left`;
               return `<div class="inv-batch-row ${i === 0 ? 'is-first' : ''}" id="batch-row-${b.id}">
-                <span class="batch-qty">${Number(batchRemaining).toFixed(1)} ${item.unit}</span>
+                <span class="batch-qty">${Number(b.qty).toFixed(1)} ${item.unit}</span>
                 <span class="exp-text ${cls}">Exp ${expLabel} · ${diffTxt}</span>
                 <button class="btn btn-sm btn-ghost" style="padding:2px 8px;font-size:11px" onclick="toggleBatchEdit(${b.id})">Edit</button>
                 <button class="btn btn-icon btn-danger" onclick="deleteBatch(${b.id})" title="Remove batch">✕</button>

@@ -105,17 +105,56 @@ const inventory = {
   getWasteRisk: () => {
     const today = new Date().toISOString().slice(0, 10);
     const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-    return db.prepare(`
+
+    const atRisk = db.prepare(`
       SELECT b.id AS batch_id, b.item_id, b.qty, b.expiry_date, b.received_at,
-             i.name, i.unit, i.cost_per_unit,
-             (b.qty * i.cost_per_unit) AS waste_value
+             i.name, i.unit, i.cost_per_unit
       FROM inventory_batches b
       JOIN inventory_items i ON i.id = b.item_id
       WHERE i.active = 1
         AND b.expiry_date <= ?
         AND i.cost_per_unit > 0
       ORDER BY b.expiry_date
-    `).all(soon).map(r => ({ ...r, is_expired: r.expiry_date < today }));
+    `).all(soon);
+
+    // For each unique item, compute consumed and apply FIFO across all batches
+    const consumeStmt = db.prepare(`
+      SELECT COALESCE(SUM(ds.qty_sold * ri.qty_used), 0) AS consumed
+      FROM dish_sales ds
+      JOIN recipe_items ri ON ri.menu_item_id = ds.menu_item_id
+      WHERE ri.inventory_item_id = @id
+        AND ds.date >= date(
+          (SELECT counted_at FROM inventory_counts WHERE item_id = @id ORDER BY counted_at DESC LIMIT 1),
+          'localtime'
+        )
+    `);
+    const allBatchesStmt = db.prepare(
+      'SELECT id, qty FROM inventory_batches WHERE item_id = ? ORDER BY expiry_date ASC'
+    );
+
+    const itemConsumed = {};
+    const batchRemaining = {};
+    const itemIds = [...new Set(atRisk.map(r => r.item_id))];
+    for (const id of itemIds) {
+      const consumed = consumeStmt.get({ id })?.consumed || 0;
+      itemConsumed[id] = consumed;
+      let unconsumed = consumed;
+      for (const b of allBatchesStmt.all(id)) {
+        const depleted = Math.min(b.qty, unconsumed);
+        unconsumed -= depleted;
+        batchRemaining[b.id] = Math.max(0, b.qty - depleted);
+      }
+    }
+
+    return atRisk.map(r => {
+      const remaining = batchRemaining[r.batch_id] ?? r.qty;
+      return {
+        ...r,
+        estimated_remaining: remaining,
+        waste_value: remaining * r.cost_per_unit,
+        is_expired: r.expiry_date < today,
+      };
+    }).filter(r => r.estimated_remaining > 0);
   },
 
   getHistory: (item_id, limit = 14) =>
