@@ -27,7 +27,14 @@ router.get('/labor', (req, res) => {
 
 router.get('/clock', (req, res) => res.json(db.getClockEntries(req.query.date)));
 router.post('/clock/in', (req, res) => { db.clockIn(req.body); res.json({ ok: true }); });
-router.post('/clock/out', (req, res) => { db.clockOut(req.params.id, req.body.clocked_out); res.json({ ok: true }); });
+router.post('/clock/out', (req, res) => {
+  const { id, clocked_out } = req.body;
+  if (!id) {
+    return res.status(400).json({ error: 'Clock entry id is required' });
+  }
+  db.clockOut(id, clocked_out);
+  res.json({ ok: true });
+});
 router.patch('/clock/:id/out', (req, res) => { db.clockOut(req.params.id, req.body.clocked_out); res.json({ ok: true }); });
 router.delete('/clock/:id', (req, res) => { db.deleteClockEntry(req.params.id); res.json({ ok: true }); });
 

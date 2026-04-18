@@ -20,21 +20,21 @@ npm start
 # → http://localhost:3001
 ```
 
-## Building the macOS app
+## Desktop app packaging
 
-Produces `dist/RestOps.app` — a self-contained double-click app with its own Node.js runtime. No install required on the target machine.
+The project can be packaged as a real macOS desktop app with Electron. It opens in its own window, not in the browser.
 
 ```bash
-bash build-mac.sh
+npm install
+npm run build:mac
 ```
 
 Output:
-- `dist/RestOps.app` — drag to Applications or share directly
-- `dist/RestOps.zip` — zip of the above for easy sharing
+- `dist/*.zip` — signed/unsigned macOS app archive output from Electron Builder
 
-Double-clicking the app starts the server and opens `http://localhost:3001` in the default browser automatically.
+When the desktop app launches, it starts the local server internally and opens the UI in an app window.
 
-> **Note:** The database (`data.db`) lives inside `RestOps.app/Contents/Resources/`. Back it up before replacing the app with a new build.
+> **Note:** RestOps now resolves the database in one place. It prefers your existing `~/Downloads/code/restaurant-ops/data.db`, then falls back to the repo-local `data.db`, and only uses the app-data folder if neither exists.
 
 ## Data
 

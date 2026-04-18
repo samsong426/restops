@@ -1,11 +1,15 @@
 {
   "name": "restaurant-ops",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Local desktop operations tool for small restaurants",
+  "main": "electron-main.js",
   "scripts": {
-    "start": "node server.js",
-    "build:mac": "bash build-mac.sh"
+    "start:web": "node server.js",
+    "start": "electron .",
+    "build:mac": "electron-builder --mac zip",
+    "build:win": "electron-builder --win portable --x64",
+    "dist": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +20,40 @@
     "express": "^5.2.1"
   },
   "devDependencies": {
-    "caxa": "^3.0.1"
+    "caxa": "^3.0.1",
+    "electron": "^41.2.1",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.restops.app",
+    "productName": "RestOps",
+    "files": [
+      "db/**/*",
+      "public/**/*",
+      "routes/**/*",
+      "electron-main.js",
+      "server.js",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "extraMetadata": {
+      "main": "electron-main.js"
+    },
+    "mac": {
+      "target": [
+        "zip"
+      ],
+      "category": "public.app-category.business"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
   }
 }

@@ -1018,14 +1018,20 @@ function renderInventoryDashboard(counts, orderList, batchesByItem = {}) {
         ${items.map(item => {
           const count = item.count;
           const par = item.par_level;
-          const pct = count != null && par > 0 ? Math.min(count / par, 1) * 100 : 0;
-          const state = count == null ? 'no-count' : count >= par ? 'ok' : 'low';
+          const estRem = item.estimated_remaining;
+          // Prefer FIFO-depleted batch total (matches what batch rows show);
+          // fall back to recipe-consumption estimate, then raw count
+          const batchTotal = item.total_batch_qty > 0
+            ? Math.max(0, item.total_batch_qty - (item.consumed || 0))
+            : null;
+          const displayQty = batchTotal != null ? batchTotal : (estRem != null ? estRem : count);
+          const pct = displayQty != null && par > 0 ? Math.min(displayQty / par, 1) * 100 : 0;
+          const state = displayQty == null ? 'no-count' : displayQty >= par ? 'ok' : 'low';
           const statusText = count == null
             ? 'not yet counted'
             : state === 'ok'
-              ? `${count} / ${par} ${item.unit}`
-              : `${count} / ${par} ${item.unit} — need ${Number(par - count).toFixed(1)} more`;
-          const estRem = item.estimated_remaining;
+              ? `${Number(displayQty).toFixed(1)} / ${par} ${item.unit}`
+              : `${Number(displayQty).toFixed(1)} / ${par} ${item.unit} — need ${Number(par - displayQty).toFixed(1)} more`;
           const usedLine = item.consumed > 0
             ? ` · <span class="inv-par-text no-count">${Number(item.consumed).toFixed(1)} used → est. ${Number(estRem).toFixed(1)} left</span>`
             : '';

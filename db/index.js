@@ -1,7 +1,31 @@
 const Database = require('better-sqlite3');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', 'data.db');
+function resolveDbPath() {
+  const explicitDbPath = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : null;
+  const localProjectDbPath = path.join(os.homedir(), 'Downloads', 'code', 'restaurant-ops', 'data.db');
+  const repoDbPath = path.join(__dirname, '..', 'data.db');
+  const appDataDbPath = process.env.APP_DATA_DIR
+    ? path.join(path.resolve(process.env.APP_DATA_DIR), 'data.db')
+    : null;
+
+  const candidates = [
+    explicitDbPath,
+    fs.existsSync(localProjectDbPath) ? localProjectDbPath : null,
+    fs.existsSync(repoDbPath) ? repoDbPath : null,
+    appDataDbPath,
+  ].filter(Boolean);
+
+  return candidates[0];
+}
+
+const DB_PATH = resolveDbPath();
+const dbDir = path.dirname(DB_PATH);
+
+fs.mkdirSync(dbDir, { recursive: true });
+
 const db = new Database(DB_PATH);
 
 db.pragma('journal_mode = WAL');
