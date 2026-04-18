@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>RestOps</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div id="toast"></div>
+
+<header>
+  <h1>RestOps</h1>
+  <span class="header-date" id="today-date"></span>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-tab="schedule">Schedule</button>
+  <button class="tab-btn" data-tab="inventory">Inventory</button>
+  <button class="tab-btn" data-tab="recipes">Recipes</button>
+  <button class="tab-btn" data-tab="sales">Sales</button>
+  <button class="tab-btn" data-tab="eod">EOD</button>
+</nav>
+
+<!-- ── SCHEDULE ───────────────────────────────────────────────────────────────── -->
+<section id="tab-schedule" class="tab active">
+
+  <div class="week-nav">
+    <button id="prev-week">&#8592;</button>
+    <span class="week-nav-label" id="week-label"></span>
+    <button id="next-week">&#8594;</button>
+  </div>
+
+  <div class="schedule-grid" id="schedule-grid"></div>
+
+  <!-- Add shift -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Add Shift</span>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label>Staff member</label>
+        <select id="slot-staff"></select>
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="slot-date">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Start</label>
+          <input type="time" id="slot-start">
+        </div>
+        <div class="field">
+          <label>End</label>
+          <input type="time" id="slot-end">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-full" onclick="addSlot()">Add Shift</button>
+    </div>
+  </div>
+
+  <!-- Time clock -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Time clock</span>
+      <span style="font-size:12px;color:var(--text-3)" id="clock-date-label"></span>
+    </div>
+    <div class="card-body">
+      <div class="clock-entries" id="clock-entries"></div>
+      <div class="row" style="margin-top:8px">
+        <div class="field"><label>Staff</label><select id="clock-staff"></select></div>
+        <div class="field"><label>Time</label><input type="time" id="clock-time"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-full" onclick="doClock('in')">Clock in</button>
+        <button class="btn btn-accent btn-full" onclick="doClock('out')">Clock out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Labor hours -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Labor hours this week</span>
+      <span class="labor-rev-pct" id="labor-rev-pct"></span>
+    </div>
+    <div class="card-body" style="gap:0">
+      <div id="labor-hours"></div>
+    </div>
+  </div>
+
+  <!-- Staff -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Staff</span>
+    </div>
+    <div class="card-body">
+      <div class="staff-list" id="staff-list"></div>
+      <div class="divider"></div>
+      <div class="section-label">Add staff member</div>
+      <div class="row">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="new-staff-name" placeholder="e.g. Maria">
+        </div>
+        <div class="field">
+          <label>Role</label>
+          <input type="text" id="new-staff-role" placeholder="e.g. Server">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Phone (optional)</label>
+          <input type="text" id="new-staff-phone" placeholder="555-0100">
+        </div>
+        <div class="field">
+          <label>Hourly rate $</label>
+          <input type="number" id="new-staff-rate" placeholder="0.00" step="0.01" min="0">
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="addStaff()">Add Staff Member</button>
+    </div>
+  </div>
+
+</section>
+
+<!-- ── INVENTORY ──────────────────────────────────────────────────────────────── -->
+<section id="tab-inventory" class="tab">
+
+  <!-- Stat summary -->
+  <div class="inv-stats-row" id="inv-stats"></div>
+
+  <!-- Order alert banner (shown only when items below par) -->
+  <div class="order-banner" id="order-banner" style="display:none">
+    <div class="order-banner-left">
+      <span class="order-banner-icon">⚠</span>
+      <div>
+        <div class="order-banner-title">Order needed</div>
+        <div class="order-banner-sub" id="order-banner-sub"></div>
+      </div>
+    </div>
+    <button class="btn btn-sm btn-danger" onclick="toggleOrderSheet()">View list</button>
+  </div>
+
+  <!-- Order sheet (hidden by default) -->
+  <div class="order-sheet" id="order-sheet" style="display:none">
+    <div class="card-header" style="padding:12px 16px">
+      <span class="card-title">Order list</span>
+      <button class="btn btn-icon btn-ghost" onclick="toggleOrderSheet()">✕</button>
+    </div>
+    <div id="order-list" style="padding:0 16px"></div>
+  </div>
+
+  <!-- Count mode toggle -->
+  <div class="inv-toolbar">
+    <span class="inv-last-count" id="inv-last-count"></span>
+    <button class="btn btn-sm btn-accent" id="count-mode-btn" onclick="toggleCountMode()">Enter count</button>
+  </div>
+
+  <!-- Item groups by category -->
+  <div id="inv-categories"></div>
+
+  <!-- Count save bar (shown in count mode) -->
+  <div class="count-save-bar" id="count-save-bar" style="display:none">
+    <span id="count-save-label">0 values entered</span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sm btn-ghost" onclick="cancelCountMode()">Cancel</button>
+      <button class="btn btn-sm btn-accent" onclick="submitCounts()">Save counts</button>
+    </div>
+  </div>
+
+  <!-- Add item -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Add item</span>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="new-item-name" placeholder="e.g. Chicken Breast">
+        </div>
+        <div class="field">
+          <label>Unit</label>
+          <input type="text" id="new-item-unit" placeholder="lbs, cases…">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Par level</label>
+          <input type="number" id="new-item-par" placeholder="0" step="0.5">
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <input type="text" id="new-item-category" placeholder="proteins, dairy…">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Cost per unit $</label>
+          <input type="number" id="new-item-cost" placeholder="e.g. 6.50" step="0.01">
+        </div>
+        <div class="field">
+          <label>Current stock</label>
+          <input type="number" id="new-item-stock" placeholder="0" step="0.5" min="0">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Expiry date</label>
+          <input type="date" id="new-item-expiry">
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="addItem()">Add Item</button>
+    </div>
+  </div>
+
+</section>
+
+<!-- ── RECIPES ─────────────────────────────────────────────────────────────────── -->
+<section id="tab-recipes" class="tab">
+
+  <!-- Waste risk banner -->
+  <div class="waste-banner" id="waste-banner" style="display:none">
+    <div class="waste-banner-left">
+      <span class="waste-icon">🗑</span>
+      <div>
+        <div class="waste-banner-title">Waste risk</div>
+        <div class="waste-banner-sub" id="waste-banner-sub"></div>
+      </div>
+    </div>
+    <span class="waste-banner-val" id="waste-banner-val"></span>
+  </div>
+
+  <!-- Waste detail -->
+  <div class="waste-detail" id="waste-detail" style="display:none"></div>
+
+  <!-- Menu items -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Menu items</span>
+    </div>
+    <div class="card-body">
+      <div id="menu-items-list"><div class="empty">No dishes yet</div></div>
+      <div class="divider"></div>
+      <div class="section-label">Add dish</div>
+      <div class="row">
+        <div class="field">
+          <label>Dish name</label>
+          <input type="text" id="new-dish-name" placeholder="e.g. Salmon Fillet">
+        </div>
+        <div class="field">
+          <label>Price $</label>
+          <input type="number" id="new-dish-price" placeholder="0.00" step="0.01">
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="addMenuItem()">Add Dish</button>
+    </div>
+  </div>
+
+  <!-- Recipe overview -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Recipe overview</span>
+      <span style="font-size:12px;color:var(--text-3)">ingredients per serving</span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div id="recipe-overview"><div class="empty" style="padding:20px">No recipes yet</div></div>
+    </div>
+  </div>
+
+  <!-- Recipe builder -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Recipe builder</span>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label>Dish</label>
+        <select id="recipe-dish-select" onchange="renderRecipeForDish()">
+          <option value="">— select a dish —</option>
+        </select>
+      </div>
+      <div id="recipe-ingredients-list"></div>
+      <div class="divider"></div>
+      <div class="section-label">Add ingredient to recipe</div>
+      <div class="row">
+        <div class="field">
+          <label>Ingredient</label>
+          <select id="recipe-ingredient-select"></select>
+        </div>
+        <div class="field">
+          <label>Qty per serving</label>
+          <input type="number" id="recipe-qty" placeholder="0.5" step="0.01" min="0">
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="addRecipeIngredient()">Add to Recipe</button>
+    </div>
+  </div>
+
+</section>
+
+<!-- ── SALES ───────────────────────────────────────────────────────────────────── -->
+<section id="tab-sales" class="tab">
+
+  <!-- Stats row -->
+  <div class="sales-stats-row" id="sales-stats"></div>
+
+  <!-- Revenue trend chart -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Revenue trend</span>
+      <span style="font-size:12px;color:var(--text-3)">last 14 days</span>
+    </div>
+    <div class="card-body" style="padding-bottom:0">
+      <div class="sales-chart" id="sales-chart"></div>
+    </div>
+  </div>
+
+  <!-- Per-dish breakdown -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Per-dish breakdown</span>
+      <span style="font-size:12px;color:var(--text-3)">last 7 days</span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div id="sales-dish-table"><div class="empty" style="padding:20px">No sales yet</div></div>
+    </div>
+  </div>
+
+  <!-- 7-day forecast -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">7-day forecast</span>
+      <span style="font-size:12px;color:var(--text-3)">based on 14-day avg</span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div id="sales-forecast-table"><div class="empty" style="padding:20px">Not enough data</div></div>
+    </div>
+  </div>
+
+  <!-- Sales history -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Sales history</span>
+      <span style="font-size:12px;color:var(--text-3)">edit or delete entries</span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div id="sales-history"><div class="empty" style="padding:20px">No sales yet</div></div>
+    </div>
+  </div>
+
+  <!-- Log sales -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Log dish sales</span>
+      <input type="date" id="log-sales-date" style="width:auto;font-size:12px;padding:5px 8px">
+    </div>
+    <div class="card-body">
+      <div id="log-sales-list"><div class="empty">No menu items yet</div></div>
+      <button class="btn btn-accent btn-full" onclick="saveDishSales()">Save sales</button>
+    </div>
+  </div>
+
+  <!-- CSV import -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Import CSV</span>
+    </div>
+    <div class="card-body">
+      <div class="csv-hint">CSV format: <code>date,dish_name,qty_sold</code> (header row optional)</div>
+      <label class="csv-drop-zone" id="csv-drop-zone">
+        <span id="csv-drop-label">Choose or drop a CSV file</span>
+        <input type="file" accept=".csv,text/csv" id="csv-file-input" style="display:none" onchange="handleCsvFile(this.files[0])">
+      </label>
+      <div id="csv-preview" style="display:none">
+        <div class="csv-preview-header">
+          <span id="csv-preview-label"></span>
+          <button class="btn btn-sm btn-ghost" onclick="clearCsvPreview()">Clear</button>
+        </div>
+        <div id="csv-preview-rows"></div>
+        <div id="csv-errors" class="csv-errors"></div>
+        <button class="btn btn-primary btn-full" id="csv-import-btn" onclick="importCsv()">Import</button>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ── EOD CLOSE ──────────────────────────────────────────────────────────────── -->
+<section id="tab-eod" class="tab">
+
+  <div class="card">
+    <div class="card-body" style="gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:15px;font-weight:700;color:var(--text)">Tonight's close</span>
+        <input type="date" id="eod-date" style="width:auto;font-size:12px;padding:5px 8px" onchange="reloadEodForDate()">
+      </div>
+      <div class="eod-progress-wrap">
+        <div class="eod-progress-fill" id="eod-progress-fill" style="width:0%"></div>
+      </div>
+      <div class="eod-progress-label" id="eod-progress-label">0 of 5 completed</div>
+    </div>
+  </div>
+
+  <div id="eod-checklist" style="display:flex;flex-direction:column;gap:8px"></div>
+
+  <button class="btn btn-primary btn-full" id="eod-save-btn" onclick="saveEod()" disabled>
+    Close night
+  </button>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Recent logs</span>
+    </div>
+    <div class="card-body" style="gap:0">
+      <div class="eod-history" id="eod-history"></div>
+    </div>
+  </div>
+
+</section>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
